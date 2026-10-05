@@ -1,0 +1,1556 @@
+/* 夜の闘技場に合わせた暗い配色だけで作っている (明るいテーマは用意しない) */
+:root {
+  color-scheme: dark;
+  --void: #0b1024;
+  --panel: rgba(9, 16, 38, 0.82);
+  --line: rgba(94, 231, 255, 0.38);
+  --ink: #e8f1ff;
+  --ink-dim: #9db0d4;
+  --you: #5ee7ff;
+  --cpu: #ff8a3d;
+  --gold: #ffd23f;
+  --danger: #ff4d6d;
+  --heal: #52ff8f; /* アイテムの色 (items.js と同じ)。パワーアップは --gold */
+  --missile: #ff5a7a;
+  --helper: #b98cff;
+  --barrier: #7ec8ff;
+  --crack: #ff9a3d; /* 床の仕掛けの色 (tiles.js の TILE_COLORS と同じ): もろい床・加速マス・しびれマス */
+  --haste: #9dff4a;
+  --shock: #ffe14d;
+  --font-display: "Dela Gothic One", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --font-num: "Chakra Petch", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  --gutter: 16px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--ink);
+  font: 500 14px/1.6 var(--font-body);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ゲームの画面全体。横向きで遊ぶとき (body.rotated) は、縦長の画面の中で 90° 回して表示する。
+   大きさと回し方は main.js が決める。中の position: fixed の部品は、この箱を基準に並ぶ */
+#app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+body.rotated #app {
+  inset: auto;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+/* 回したときは、画面の端のよけ (ノッチやホームバー) も回す。スマホの上を左に向けて持つので、ゲームの上は画面の右 */
+body.rotated {
+  --safe-t: env(safe-area-inset-right, 0px);
+  --safe-r: env(safe-area-inset-bottom, 0px);
+  --safe-b: env(safe-area-inset-left, 0px);
+  --safe-l: env(safe-area-inset-top, 0px);
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+body:not(.touch) .touch-only,
+body.touch .pc-only {
+  display: none !important;
+}
+
+body:not(.in-battle) #hud,
+body:not(.in-battle) #touch-ui,
+body:not(.in-battle) #keys,
+body:not(.in-battle) #tags {
+  display: none;
+}
+
+/* ターゲットのボタンとキーの案内は、4人対戦のとき (body.multi。main.js が付ける) だけ */
+body:not(.multi) .btn[data-action="target"],
+body:not(.multi) #keys [data-action="target"] {
+  display: none;
+}
+
+/* 上の帯: 体力ゲージと残り時間 */
+#hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(var(--safe-t) + 10px) calc(var(--safe-r) + var(--gutter)) 0 calc(var(--safe-l) + var(--gutter));
+  pointer-events: none;
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 14px;
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+.side {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.cpu .label {
+  flex-direction: row-reverse;
+}
+
+.you .name {
+  color: var(--you);
+}
+
+/* 右の札は、ロックオンしている相手の色 (--foe。hud.js が相手を切りかえるたびに決める) */
+.cpu .name {
+  color: var(--foe, var(--cpu));
+}
+
+.hp-num {
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  background: rgba(4, 8, 22, 0.72);
+  border: 1px solid rgba(232, 241, 255, 0.35);
+  transform: skewX(-24deg);
+}
+
+.cpu .gauge {
+  transform: skewX(24deg);
+}
+
+.gauge .fill,
+.gauge .lag {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+}
+
+.cpu .gauge .fill,
+.cpu .gauge .lag {
+  transform-origin: right center;
+}
+
+.gauge .lag {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.you .fill {
+  background: linear-gradient(180deg, #b4f6ff, var(--you) 45%, #1d8fb8);
+}
+
+.cpu .fill {
+  background: var(--foe, var(--cpu));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--foe, var(--cpu)) 45%, #fff), var(--foe, var(--cpu)) 45%, color-mix(in srgb, var(--foe, var(--cpu)) 70%, #000));
+}
+
+.gauge.low .fill {
+  background: linear-gradient(180deg, #ffc2cd, var(--danger) 45%, #a3203a);
+  animation: low-blink 0.6s steps(2) infinite;
+}
+
+@keyframes low-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.clock {
+  min-width: 2.4em;
+  padding: 8px 12px 7px;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background: var(--panel);
+  clip-path: polygon(16% 0, 84% 0, 100% 50%, 84% 100%, 16% 100%, 0 50%);
+}
+
+.clock.hurry {
+  color: var(--danger);
+}
+
+.pips {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.pips i {
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  background: var(--you);
+  box-shadow: 0 0 6px var(--you);
+}
+
+.pips i.used {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px rgba(94, 231, 255, 0.45);
+}
+
+/* アイテム: 効き目の残り (パワーアップ・バリア・お助けロボ) と、回復したときのゲージの光 */
+.buffs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cpu .buffs {
+  justify-content: flex-end;
+}
+
+.buff {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--gold);
+  background: rgba(255, 210, 63, 0.14);
+  border: 1px solid rgba(255, 210, 63, 0.6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.buff.barrier {
+  color: var(--barrier);
+  background: rgba(126, 200, 255, 0.14);
+  border-color: rgba(126, 200, 255, 0.6);
+}
+
+.buff.helper {
+  color: var(--helper);
+  background: rgba(185, 140, 255, 0.14);
+  border-color: rgba(185, 140, 255, 0.6);
+}
+
+/* 加速マスに乗ったあとの残り秒 */
+.buff.haste {
+  color: var(--haste);
+  background: rgba(157, 255, 74, 0.14);
+  border-color: rgba(157, 255, 74, 0.6);
+}
+
+.buff b {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge.healed {
+  animation: heal-glow 0.8s ease-out;
+}
+
+@keyframes heal-glow {
+  from {
+    box-shadow: 0 0 0 2px var(--heal), 0 0 18px var(--heal);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* 画面の真ん中の大きな文字 */
+#call {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 42%;
+  transform: translateY(-50%);
+  text-align: center;
+  pointer-events: none;
+  font-family: var(--font-display);
+  font-size: clamp(48px, 13vmin, 128px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  text-shadow: 0 0 24px rgba(94, 231, 255, 0.7), 0 5px 0 rgba(0, 0, 0, 0.45);
+}
+
+#call.show {
+  animation: call-in 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+#call.fight {
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(255, 210, 63, 0.6), 0 5px 0 rgba(0, 0, 0, 0.45);
+}
+
+#call.ko,
+#call.timeup {
+  color: var(--danger);
+  text-shadow: 0 0 24px rgba(255, 77, 109, 0.6), 0 5px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* 核ミサイルを打ち上げたときの文字 (少し小さく、赤く光る金色) */
+#call.nuke {
+  font-size: clamp(32px, 9vmin, 88px);
+  color: #ffdf6b;
+  text-shadow: 0 0 24px rgba(255, 80, 40, 0.85), 0 5px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* 核の爆発で、画面を白く光らせる (main.js の flashScreen。動きを減らす設定では soft で弱く) */
+#flash {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#flash.show {
+  animation: flash-out 0.9s ease-out;
+}
+
+#flash.soft.show {
+  animation-name: flash-soft;
+}
+
+@keyframes flash-out {
+  from {
+    opacity: 0.95;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes flash-soft {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes call-in {
+  from {
+    opacity: 0;
+    scale: 1.8;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+/* 4人対戦: ほかのロボの頭の上の名前と体力 (色はロボの弾の色 --tag)。ロックオンしている相手は、名前の地をその色で塗る */
+#tags {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  font: 700 11px/1.3 var(--font-body);
+  white-space: nowrap;
+  color: var(--tag);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+.tag-name {
+  padding: 0 6px;
+}
+
+.tag.target .tag-name {
+  color: var(--void);
+  text-shadow: none;
+  background: var(--tag);
+}
+
+.tag-bar {
+  position: relative;
+  width: 44px;
+  height: 5px;
+  overflow: hidden;
+  background: rgba(4, 8, 22, 0.75);
+  border: 1px solid rgba(232, 241, 255, 0.35);
+}
+
+.tag-bar i {
+  position: absolute;
+  inset: 0;
+  background: var(--tag);
+  transform-origin: left center;
+}
+
+.tag.ko {
+  opacity: 0.45;
+}
+
+/* ダメージの数字 */
+#popups {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pop {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #fff;
+  animation: pop-rise 0.9s ease-out forwards;
+}
+
+.pop.to-cpu {
+  text-shadow: 0 0 8px var(--you), 0 2px 0 #000;
+}
+
+.pop.to-you {
+  text-shadow: 0 0 8px var(--cpu), 0 2px 0 #000;
+}
+
+.pop.big {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--gold);
+}
+
+/* アイテムを取ったときの文字 */
+.pop.heal {
+  font-size: 26px;
+  color: var(--heal);
+  text-shadow: 0 0 10px rgba(82, 255, 143, 0.7), 0 2px 0 #000;
+}
+
+.pop.power {
+  text-shadow: 0 0 10px rgba(255, 210, 63, 0.7), 0 2px 0 #000;
+}
+
+.pop.missile {
+  color: var(--missile);
+  text-shadow: 0 0 10px rgba(255, 90, 122, 0.7), 0 2px 0 #000;
+}
+
+.pop.helper {
+  color: var(--helper);
+  text-shadow: 0 0 10px rgba(185, 140, 255, 0.7), 0 2px 0 #000;
+}
+
+.pop.barrier {
+  color: var(--barrier);
+  text-shadow: 0 0 10px rgba(126, 200, 255, 0.7), 0 2px 0 #000;
+}
+
+/* シールドで防いだ・ブレードをはじき返した */
+.pop.guard {
+  text-shadow: 0 0 10px rgba(232, 241, 255, 0.8), 0 2px 0 #000;
+}
+
+/* 床の仕掛け: 加速マスに乗った・しびれマスでしびれた */
+.pop.haste {
+  color: var(--haste);
+  text-shadow: 0 0 10px rgba(157, 255, 74, 0.7), 0 2px 0 #000;
+}
+
+.pop.shock {
+  color: var(--shock);
+  text-shadow: 0 0 10px rgba(255, 225, 77, 0.8), 0 2px 0 #000;
+}
+
+/* 必殺技: ゲージが満タンになった・核ミサイルでロックオンした */
+.pop.nuke {
+  color: #ffdf6b;
+  text-shadow: 0 0 10px rgba(255, 80, 40, 0.85), 0 2px 0 #000;
+}
+
+@keyframes pop-rise {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  15% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -46px;
+  }
+}
+
+/* PC: キーの案内 (再使用までの時間で暗くなる) */
+#keys {
+  position: fixed;
+  left: calc(var(--safe-l) + var(--gutter));
+  right: calc(var(--safe-r) + var(--gutter));
+  bottom: calc(var(--safe-b) + 14px);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+#keys span {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 5px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+#keys span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 6, 16, 0.72);
+  transform-origin: left center;
+  transform: scaleX(var(--cool, 0));
+}
+
+kbd {
+  min-width: 24px;
+  padding: 2px 6px;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 12px;
+  text-align: center;
+  color: var(--void);
+  background: var(--you);
+}
+
+/* スマホ: 左の仮想スティックと右のボタン */
+#stick-zone {
+  position: fixed;
+  left: 0;
+  top: 22%;
+  bottom: 0;
+  width: 50%;
+  touch-action: none;
+}
+
+#stick {
+  --size: 104px;
+  position: fixed;
+  left: calc(var(--safe-l) + 92px);
+  top: calc(100% - var(--safe-b) - 100px);
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border-radius: 50%;
+  border: 2px solid rgba(94, 231, 255, 0.35);
+  background: rgba(94, 231, 255, 0.06);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+#stick.active {
+  opacity: 1;
+}
+
+#stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #c8f8ff, var(--you) 60%, #1b88ad);
+  box-shadow: 0 0 14px rgba(94, 231, 255, 0.6);
+}
+
+/* ボタン: 右手の親指がとどく右下に、大きいボタンを間を空けて並べる。--x / --y は、ボタンの一式の右下の角から、ボタンの真ん中までの距離。
+   横向き: 下の段にショット・ジャンプ・ステップ、その上の段にシールド・グレネード・ブレード、いちばん上の段にマイン・ターゲット (4人対戦のときだけ)・
+   ミサイル・必殺技 (必殺技は、うっかり押さないよう、いちばん遠い左上)。
+   シールドはショットの真上 (指を下へすべらせると、ほかのボタンを通らずに構えを解いてすぐ撃てる)。ステップはジャンプのとなり。
+   縦向き (body.portrait) は、左の親指のスティックにかからないよう、下の2段 (ショット・ジャンプ / シールド・ステップ) を右に寄せ、4段に積む。
+   画面が小さいときは、main.js の fitPad が一式ごと縮める (縦向きの下の2段の幅は、main.js の PAD_FIT.lower と合わせる) */
+#pad {
+  position: fixed;
+  right: calc(var(--safe-r) + 12px);
+  bottom: calc(var(--safe-b) + 16px);
+  width: 352px;
+  height: 298px;
+  transform-origin: right bottom;
+  touch-action: none;
+}
+
+/* ボタンの縁より少し外を押しても届くよう、指を受ける範囲をまわりに広げる (どのボタンかは input.js が近さで決める) */
+#pad::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+}
+
+.btn {
+  --size: 76px;
+  position: absolute;
+  right: calc(var(--x) - var(--size) / 2);
+  bottom: calc(var(--y) - var(--size) / 2);
+  display: grid;
+  place-items: center;
+  width: var(--size);
+  height: var(--size);
+  padding: 0;
+  border-radius: 50%;
+  font: 700 12.5px/1.1 var(--font-body);
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  background: radial-gradient(circle at 50% 30%, rgba(94, 231, 255, 0.32), rgba(9, 16, 38, 0.8) 70%);
+  border: 2px solid rgba(94, 231, 255, 0.65);
+  touch-action: none;
+}
+
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(rgba(3, 6, 16, 0.74) calc(var(--cool, 0) * 1turn), transparent 0);
+  pointer-events: none;
+}
+
+.btn.on {
+  scale: 0.92;
+  background: radial-gradient(circle at 50% 30%, rgba(94, 231, 255, 0.65), rgba(9, 16, 38, 0.8) 70%);
+}
+
+.btn[data-action="gun"] {
+  --size: 104px;
+  --x: 60px;
+  --y: 62px;
+  font-size: 16px;
+}
+
+/* オートで撃つとき (body.auto-shot。main.js が付ける) は、ショットのボタンに AUTO と出す */
+body.auto-shot .btn[data-action="gun"]::before {
+  content: "AUTO";
+  position: absolute;
+  top: 17%;
+  left: 0;
+  right: 0;
+  font: 700 10px/1 var(--font-num);
+  letter-spacing: 0.14em;
+  text-align: center;
+  color: var(--gold);
+  pointer-events: none;
+}
+
+.btn[data-action="jump"] {
+  --size: 90px;
+  --x: 170px;
+  --y: 48px;
+  font-size: 15px;
+}
+
+/* ステップ (地上でスティックの向きへ素早く動く。空中では空中ダッシュ) */
+.btn[data-action="step"] {
+  --size: 80px;
+  --x: 276px;
+  --y: 56px;
+  font-size: 13.5px;
+}
+
+.btn[data-action="guard"] {
+  --x: 56px;
+  --y: 170px;
+}
+
+.btn[data-action="bomb"] {
+  --x: 150px;
+  --y: 160px;
+}
+
+.btn[data-action="attack"] {
+  --size: 74px;
+  --x: 244px;
+  --y: 152px;
+}
+
+.btn[data-action="pod"] {
+  --size: 68px;
+  --x: 62px;
+  --y: 262px;
+}
+
+/* シールドが割れて構えられない間は、赤くする (暗い部分は、耐久がもどるにつれて減る) */
+.btn.broken {
+  color: var(--danger);
+  border-color: rgba(255, 77, 109, 0.75);
+  box-shadow: 0 0 0 2px rgba(255, 77, 109, 0.6), 0 0 12px rgba(255, 77, 109, 0.45);
+}
+
+.btn.broken::after {
+  background: conic-gradient(rgba(80, 8, 24, 0.62) calc(var(--cool, 0) * 1turn), transparent 0);
+}
+
+#keys span.broken kbd {
+  background: var(--danger);
+}
+
+/* ターゲット (4人対戦のときだけ出す)。いちばん上の段の、マインの左 */
+.btn[data-action="target"] {
+  --size: 62px;
+  --x: 148px;
+  --y: 254px;
+  font-size: 10.5px;
+  letter-spacing: -0.04em;
+}
+
+/* ミサイル (どのロボでも撃てる) */
+.btn[data-action="missile"] {
+  --size: 68px;
+  --x: 232px;
+  --y: 250px;
+  font-size: 11.5px;
+}
+
+/* 必殺技。ゲージがたまっていないぶんは暗く (--cool)、満タン (ready。hud.js が付ける) で金色に光って脈打つ */
+.btn[data-action="special"] {
+  --size: 70px;
+  --x: 316px;
+  --y: 246px;
+  color: var(--gold);
+  border-color: rgba(255, 210, 63, 0.7);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 120, 60, 0.35), rgba(9, 16, 38, 0.82) 70%);
+}
+
+.btn[data-action="special"].ready {
+  color: #fff;
+  border-color: var(--gold);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 176, 60, 0.9), rgba(170, 34, 22, 0.88) 75%);
+  animation: special-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes special-pulse {
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 210, 63, 0.75), 0 0 22px rgba(255, 140, 40, 0.9);
+  }
+}
+
+#keys span.ready kbd {
+  background: var(--gold);
+}
+
+/* 縦向き (ゲームの画面の向き。body.portrait は main.js が付ける) では、スティックを置ける範囲を下のほうにする */
+body.portrait #stick-zone {
+  top: 40%;
+  width: 44%;
+}
+
+body.portrait #stick {
+  top: calc(100% - var(--safe-b) - 120px);
+}
+
+/* 縦向きの並び: 下から、ショット・ジャンプ / シールド・ステップ / グレネード・ブレード・ターゲット / マイン・ミサイル・必殺技。
+   下の2段は、右はしから PAD_FIT.lower (216px) の中に入れる */
+body.portrait #pad {
+  width: 282px;
+  height: 406px;
+}
+
+body.portrait .btn[data-action="step"] {
+  --x: 164px;
+  --y: 154px;
+}
+
+body.portrait .btn[data-action="bomb"] {
+  --x: 70px;
+  --y: 270px;
+}
+
+body.portrait .btn[data-action="attack"] {
+  --x: 166px;
+  --y: 260px;
+}
+
+body.portrait .btn[data-action="target"] {
+  --x: 250px;
+  --y: 254px;
+}
+
+body.portrait .btn[data-action="pod"] {
+  --x: 64px;
+  --y: 370px;
+}
+
+body.portrait .btn[data-action="missile"] {
+  --x: 150px;
+  --y: 362px;
+}
+
+body.portrait .btn[data-action="special"] {
+  --x: 236px;
+  --y: 356px;
+}
+
+/* タイトルと結果の画面 */
+#screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  overflow-y: auto;
+  padding: calc(var(--safe-t) + 20px) calc(var(--safe-r) + var(--gutter)) calc(var(--safe-b) + 20px) calc(var(--safe-l) + var(--gutter));
+  background: radial-gradient(120% 90% at 30% 40%, rgba(11, 16, 36, 0.2), rgba(11, 16, 36, 0.9));
+  touch-action: pan-y;
+}
+
+/* 回しているときは、指を縦に動かすと画面では横の動きになるので、どちらの向きのスクロールも通す */
+body.rotated #screen {
+  touch-action: pan-x pan-y;
+}
+
+#screen > section {
+  width: min(900px, 100%);
+  margin: auto;
+}
+
+#title-screen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  align-items: center;
+  gap: 20px 40px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--you);
+}
+
+h1 {
+  margin: 6px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(36px, 10vmin, 72px);
+  line-height: 1.04;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  text-shadow: 0 0 28px rgba(94, 231, 255, 0.35);
+}
+
+.lead {
+  max-width: 32em;
+  margin: 14px 0 20px;
+  font-size: 15px;
+}
+
+.cta {
+  padding: 13px 30px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: #06111f;
+  background: var(--you);
+  border: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4) inset, 0 8px 24px rgba(94, 231, 255, 0.28);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cta:hover {
+  background: #8ff0ff;
+}
+
+.cta:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.howto {
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.howto h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--ink-dim);
+}
+
+.howto dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.howto dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--you);
+}
+
+.howto dd {
+  margin: 0;
+}
+
+.item-heal,
+.item-power,
+.item-missile,
+.item-helper,
+.item-barrier {
+  font-weight: 700;
+}
+
+.item-helper {
+  color: var(--helper);
+}
+
+.item-barrier {
+  color: var(--barrier);
+}
+
+.item-heal {
+  color: var(--heal);
+}
+
+.item-power {
+  color: var(--gold);
+}
+
+.item-missile {
+  color: var(--missile);
+}
+
+/* 操作の説明の、床の仕掛けの色 */
+.tile-crack,
+.tile-speed,
+.tile-shock {
+  font-weight: 700;
+}
+
+.tile-crack {
+  color: var(--crack);
+}
+
+.tile-speed {
+  color: var(--haste);
+}
+
+.tile-shock {
+  color: var(--shock);
+}
+
+.key {
+  padding: 0 5px;
+  font-family: var(--font-num);
+  font-size: 11px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+}
+
+.note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+/* フリー対戦のルールの切りかえ (タイトル画面)。選んでいるルールは光る */
+.rules {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.rules-label {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.rule {
+  padding: 6px 12px;
+  font: 700 13px/1.2 var(--font-body);
+  color: var(--ink);
+  background: rgba(94, 231, 255, 0.06);
+  border: 1px solid rgba(94, 231, 255, 0.25);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rule[aria-pressed="true"] {
+  color: var(--you);
+  background: rgba(94, 231, 255, 0.2);
+  border-color: var(--you);
+}
+
+.rule:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+#result-screen {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+#result-screen .eyebrow {
+  color: var(--ink-dim);
+}
+
+#result-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(64px, 18vmin, 140px);
+  line-height: 1;
+  letter-spacing: 0.05em;
+}
+
+#result-title.you {
+  color: var(--gold);
+  text-shadow: 0 0 30px rgba(255, 210, 63, 0.5);
+}
+
+#result-title.cpu {
+  color: var(--ink-dim);
+}
+
+#result-detail {
+  margin: 0 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 試合前の、対戦相手の紹介 (1行目が名前、2行目がセリフ、3行目が闘技場) */
+#matchup {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(42% + clamp(48px, 13vmin, 128px) * 0.55 + 12px);
+  margin: 0;
+  padding: 8px var(--gutter);
+  text-align: center;
+  white-space: pre-line;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  background: linear-gradient(90deg, transparent, rgba(9, 16, 38, 0.75) 18%, rgba(9, 16, 38, 0.75) 82%, transparent);
+  pointer-events: none;
+}
+
+/* ボタンの並びと、控えめなボタン */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+#result-screen .actions {
+  justify-content: center;
+}
+
+.ghost {
+  padding: 12px 20px;
+  font: 700 15px/1.2 var(--font-body);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ghost:hover {
+  background: rgba(94, 231, 255, 0.1);
+}
+
+.ghost.small {
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.ghost:focus-visible,
+.slot-tab:focus-visible,
+.part:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.progress-line {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.unlock {
+  margin: 0 0 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  background: rgba(255, 210, 63, 0.12);
+  border: 1px solid rgba(255, 210, 63, 0.5);
+}
+
+.unlock strong {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--gold);
+}
+
+/* 組み立て画面: 横長の画面では右、縦長の画面では下にパネル。空いたところに台の上のロボが映る */
+#screen[data-mode="garage"] {
+  padding-top: calc(var(--safe-t) + 10px);
+  padding-bottom: calc(var(--safe-b) + 10px);
+  background: none;
+}
+
+#screen > #garage-screen {
+  display: flex;
+  width: min(480px, 100%);
+  margin: 0 0 0 auto;
+}
+
+/* 見出しと下のボタンは動かさず、あいだだけスクロールする */
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 18px 12px;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 12px;
+  border-top: 1px solid rgba(94, 231, 255, 0.2);
+}
+
+.panel-actions .cta {
+  padding: 10px 22px;
+  font-size: 17px;
+}
+
+body.portrait #screen > #garage-screen {
+  width: 100%;
+  height: 60%;
+  margin: auto 0 0;
+}
+
+/* 大会の画面: 横長ならライバルの一覧と説明を左右に、縦長なら上下に並べる */
+#screen > #cup-screen {
+  display: flex;
+  width: min(820px, 100%);
+  max-height: 100%;
+}
+
+.cup-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px 22px;
+}
+
+body.portrait .cup-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rival-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.rival {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "no title" "no note";
+  align-items: center;
+  gap: 0 10px;
+  padding: 7px 10px;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(4, 8, 22, 0.6);
+  border: 1px solid rgba(232, 241, 255, 0.2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rival-no {
+  grid-area: no;
+  min-width: 1.2em;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 20px;
+  text-align: center;
+  color: var(--ink-dim);
+}
+
+.rival-title {
+  grid-area: title;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rival-note {
+  grid-area: note;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.rival.focused {
+  background: rgba(94, 231, 255, 0.14);
+  border-color: var(--you);
+}
+
+.rival.beaten .rival-no,
+.rival.beaten .rival-note {
+  color: var(--you);
+}
+
+.rival.next .rival-no,
+.rival.next .rival-note {
+  color: var(--gold);
+}
+
+.rival.locked {
+  color: var(--ink-dim);
+  border-style: dashed;
+}
+
+.rival:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.rival-detail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.rival-round {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.rival-detail h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+/* ライバルのセリフ (オレンジは CPU の色) */
+.rival-line,
+.result-line {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 14px;
+  background: rgba(255, 138, 61, 0.08);
+  border-left: 3px solid var(--cpu);
+}
+
+.rival-reward {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.cta:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+.result-line {
+  max-width: 32em;
+  text-align: left;
+}
+
+.champion {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(255, 210, 63, 0.5);
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 12px 18px 8px;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.panel-head .progress-line {
+  margin: 0;
+}
+
+.slot-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.slot-tab {
+  display: grid;
+  gap: 2px;
+  padding: 7px 4px;
+  text-align: center;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(94, 231, 255, 0.06);
+  border: 1px solid rgba(94, 231, 255, 0.25);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.slot-tab[aria-pressed="true"] {
+  background: rgba(94, 231, 255, 0.2);
+  border-color: var(--you);
+}
+
+.slot-name {
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.slot-tab[aria-pressed="true"] .slot-name {
+  color: var(--you);
+}
+
+.slot-part {
+  overflow: hidden;
+  font-size: clamp(10px, 2.6vw, 12px);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.part-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.part {
+  display: grid;
+  gap: 1px;
+  min-width: 88px;
+  padding: 7px 12px;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(4, 8, 22, 0.6);
+  border: 1px solid rgba(232, 241, 255, 0.2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.part.focused {
+  border-color: var(--you);
+}
+
+.part.equipped {
+  background: rgba(94, 231, 255, 0.18);
+}
+
+.part.locked {
+  color: var(--ink-dim);
+  border-style: dashed;
+}
+
+.part-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.part-note {
+  min-height: 1.3em;
+  font-size: 11px;
+  color: var(--you);
+}
+
+.part.locked .part-note {
+  color: var(--ink-dim);
+}
+
+.part-detail h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.part-detail p {
+  margin: 2px 0 8px;
+  font-size: 13px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: rgba(94, 231, 255, 0.1);
+  border: 1px solid rgba(94, 231, 255, 0.25);
+}
+
+.robot-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 6px 16px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(94, 231, 255, 0.2);
+}
+
+.stat {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.meter {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.meter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--you);
+  transform-origin: left center;
+  transform: scaleX(var(--v, 0));
+}
+
+.stat-count {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: var(--you);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #call.show,
+  .pop,
+  .gauge.low .fill,
+  .gauge.healed {
+    animation: none;
+  }
+}

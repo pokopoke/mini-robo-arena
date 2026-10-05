@@ -1,0 +1,7 @@
+# 組み立てた公開用ファイル（python tools/build_artifact.py で作り直せる）
+dist/
+# ブラウザ自動テストの出力
+.playwright-mcp/
+__pycache__/
+# 作業メモ (公開の置き場には入れない。パソコンには残す)
+CLAUDE.md

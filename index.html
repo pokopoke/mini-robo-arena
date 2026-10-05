@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ミニロボ・アリーナ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
+<link rel="stylesheet" href="src/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div class="bar">
+    <div class="side you">
+      <div class="label"><span class="name">YOU</span><span class="hp-num" id="hp-you-num">1000</span></div>
+      <div class="gauge"><div class="lag" id="lag-you"></div><div class="fill" id="hp-you"></div></div>
+      <div class="pips" id="pips-you"></div>
+      <div class="buffs" id="buffs-you" hidden>
+        <span class="buff" hidden>パワーアップ <b></b></span>
+        <span class="buff barrier" hidden>バリア <b></b></span>
+        <span class="buff helper" hidden>お助け <b></b></span>
+        <span class="buff haste" hidden>加速 <b></b></span>
+      </div>
+    </div>
+    <div class="clock" id="clock">90</div>
+    <div class="side cpu">
+      <div class="label"><span class="name" id="cpu-name">CPU</span><span class="hp-num" id="hp-cpu-num">1000</span></div>
+      <div class="gauge"><div class="lag" id="lag-cpu"></div><div class="fill" id="hp-cpu"></div></div>
+      <div class="buffs" id="buffs-cpu" hidden>
+        <span class="buff" hidden>パワーアップ <b></b></span>
+        <span class="buff barrier" hidden>バリア <b></b></span>
+        <span class="buff helper" hidden>お助け <b></b></span>
+        <span class="buff haste" hidden>加速 <b></b></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="call" hidden></div>
+<p id="matchup" hidden></p>
+<div id="tags"></div>
+<div id="popups"></div>
+<div id="flash"></div>
+
+<div id="keys" class="pc-only">
+  <span data-action="gun"><kbd>J</kbd>ショット</span>
+  <span data-action="bomb"><kbd>K</kbd>グレネード</span>
+  <span data-action="pod"><kbd>L</kbd>マイン</span>
+  <span data-action="missile"><kbd>H</kbd>ミサイル</span>
+  <span data-action="attack"><kbd>I</kbd>ブレード</span>
+  <span data-action="guard"><kbd>U</kbd>シールド</span>
+  <span data-action="target"><kbd>O</kbd>ターゲット</span>
+  <span data-action="special"><kbd>P</kbd>必殺技</span>
+  <span data-action="jump"><kbd>Space</kbd>ジャンプ</span>
+  <span data-action="step"><kbd>Shift</kbd>ステップ</span>
+</div>
+
+<div id="touch-ui" class="touch-only">
+  <div id="stick-zone"></div>
+  <div id="stick"><div id="stick-knob"></div></div>
+  <div id="pad">
+    <button type="button" class="btn" data-action="attack">ブレード</button>
+    <button type="button" class="btn" data-action="gun">ショット</button>
+    <button type="button" class="btn" data-action="jump">ジャンプ</button>
+    <button type="button" class="btn" data-action="step">ステップ</button>
+    <button type="button" class="btn" data-action="bomb">グレネード</button>
+    <button type="button" class="btn" data-action="pod">マイン</button>
+    <button type="button" class="btn" data-action="guard">シールド</button>
+    <button type="button" class="btn" data-action="target">ターゲット</button>
+    <button type="button" class="btn" data-action="missile">ミサイル</button>
+    <button type="button" class="btn" data-action="special">必殺技</button>
+  </div>
+</div>
+
+<div id="screen">
+  <section id="title-screen">
+    <div class="intro">
+      <p class="eyebrow">試作版・1対1のロボバトル</p>
+      <h1>ミニロボ・<br>アリーナ</h1>
+      <p class="lead">小さな闘技場で、CPUのロボと1対1で戦います。相手の体力1000を先に0にすれば勝ち。90秒たったら、体力が多く残っているほうの勝ちです。大会でライバルに勝つと、そのロボのパーツが手に入ります。フリー対戦では、4人のバトルロイヤルと2対2もできます。床のマス目には、穴があく床などの仕掛けがあります。攻撃を当てると必殺技のゲージがたまり、満タンで核ミサイルを撃てます。</p>
+      <div class="actions">
+        <button type="button" id="open-cup" class="cta">大会</button>
+        <button type="button" id="start-free" class="ghost">フリー対戦</button>
+        <button type="button" id="open-garage" class="ghost">ロボを組み立てる</button>
+        <button type="button" id="rotate-toggle" class="ghost" hidden>横向きで遊ぶ</button>
+      </div>
+      <div class="rules" role="group" aria-labelledby="rules-label">
+        <span class="rules-label" id="rules-label">フリー対戦のルール</span>
+        <button type="button" class="rule" data-rule="duel" aria-pressed="true">1対1</button>
+        <button type="button" class="rule" data-rule="royal" aria-pressed="false">バトルロイヤル</button>
+        <button type="button" class="rule" data-rule="team" aria-pressed="false">2対2</button>
+      </div>
+      <div class="rules" role="group" aria-labelledby="auto-label">
+        <span class="rules-label" id="auto-label">ショット</span>
+        <button type="button" class="rule" data-auto="on" aria-pressed="true">オートで撃つ</button>
+        <button type="button" class="rule" data-auto="off" aria-pressed="false">ボタンで撃つ</button>
+      </div>
+      <p class="note" id="rotate-hint" hidden>「横向きで遊ぶ」を押したら、スマホの上が左に来るように持ちかえてください。</p>
+      <p class="progress-line"></p>
+    </div>
+    <div class="howto">
+      <h2>操作</h2>
+      <dl>
+        <dt>移動</dt>
+        <dd><span class="touch-only">画面の左側に指を置いて、行きたい方へずらす</span><span class="pc-only">WASD か矢印キー</span></dd>
+        <dt>ショット<span class="key pc-only">J</span></dt>
+        <dd>連射する弾。パーツで撃ち方が変わる。「オートで撃つ」にすると、相手が見えているときに自動で撃つ。あなたの弾とミサイルは、CPU のものより相手を追いかける</dd>
+        <dt>グレネード<span class="key pc-only">K</span></dt>
+        <dd>山なりに相手の足元へ。床の輪が落ちる場所</dd>
+        <dt>マイン<span class="key pc-only">L</span></dt>
+        <dd>近づくと爆発する機雷。ショットで撃ち落とせる</dd>
+        <dt>ミサイル<span class="key pc-only">H</span></dt>
+        <dd>両肩の後ろから2発を打ち上げ、曲がって相手を追う。当たると爆発してダウン。どのロボでも使える (撃ったら少し待つ)</dd>
+        <dt>必殺技<span class="key pc-only">P</span></dt>
+        <dd>攻撃を当てたり受けたりするとゲージがたまり、満タンでボタンが光る。押すと核ミサイルを打ち上げ、相手の足元に赤い輪が出て、少しあとに空から落ちて輪の中を大爆発させる (シールドでは防げない)。ダウンさせてから撃つと当たりやすい</dd>
+        <dt>ブレード<span class="key pc-only">I</span></dt>
+        <dd>光る刃で斬る。続けて押すと3回まで斬れて、3回目で相手がダウン。離れていると踏み込んでから斬る (出だしは攻撃を受けない)</dd>
+        <dt>ブレードの技</dt>
+        <dd><span class="touch-only">スティック</span><span class="pc-only">移動キー</span>を倒しながら押すと技が変わる。前 (相手のほう) は遠くから突っこむ突き、横は回り込み斬り (シールドで防げない)、空中では急降下斬り。突きと急降下斬りは当たるとダウン</dd>
+        <dt>シールド<span class="key pc-only">U</span></dt>
+        <dd>押している間、前からの弾・爆発・ブレードを防ぐ。ブレードははじき返す。構えている間は撃てず、ゆっくり動く。防ぐほど削れて、割れるとよろけて少しのあいだ使えない。回り込み斬りと、足元に落ちたグレネードは防げない</dd>
+        <dt>4人対戦</dt>
+        <dd>フリー対戦のルールで選ぶ (大会はいつも1対1)。バトルロイヤルは全員が敵で、最後まで残れば勝ち。2対2はグリーンがなかまで、相手の2体を倒せば勝ち。弾や爆発は相手の誰にでも当たり、なかまには当たらない</dd>
+        <dt>ターゲット<span class="key pc-only">O</span></dt>
+        <dd>4人対戦のとき、狙う相手 (ロックオン) を次の相手へ切りかえる。右上の体力と、頭の上の名前が光っている相手を狙っている</dd>
+        <dt>ジャンプ<span class="key pc-only">Space</span></dt>
+        <dd>空中でもう一度押すと空中ダッシュ</dd>
+        <dt>ステップ<span class="key pc-only">Shift</span></dt>
+        <dd><span class="touch-only">スティック</span><span class="pc-only">移動キー</span>の向きへ素早く動いて、攻撃をよける。向きを決めていなければ右へ。空中では空中ダッシュになる</dd>
+        <dt>アイテム</dt>
+        <dd>ときどき現れる。触れると取れる。<span class="item-heal">緑</span>は体力回復、<span class="item-power">金</span>は10秒間ダメージ1.5倍、<span class="item-missile">赤</span>はその場にミサイル砲台が立つ、<span class="item-helper">紫</span>はお助けロボが15秒間いっしょに撃ってくれる、<span class="item-barrier">水色</span>はバリアがダメージを150まで防ぐ (10秒)</dd>
+        <dt>マス目の仕掛け</dt>
+        <dd>床はマス目に分かれていて、模様の光るマスには仕掛けがある。<span class="tile-crack">オレンジ</span>のもろい床は、爆発でひびが入り、もう一度爆発すると割れて穴になる。穴に落ちるとダメージ (落ちかけたら空中ダッシュで逃げられる)。穴は8秒でもどる。<span class="tile-speed">黄緑</span>の加速マスに乗ると、3秒のあいだ速く走れる。<span class="tile-shock">黄色</span>のしびれマスは、点滅してから電気が流れ、乗っているとしびれて動けない。ジャンプしていれば平気</dd>
+      </dl>
+      <p class="note">カメラはいつも相手のほうを向きます。爆発やブレードの3回目を受けるか、弾を続けて受けるとダウン。ダウンしている間と、起き上がった直後の少しのあいだは無敵です。</p>
+      <p class="note touch-only">ボタンは押したまま指をすべらせると、となりのボタンに押しかえられます。シールドから下のショットへすべらせると、構えを解いてすぐ撃てます。</p>
+    </div>
+  </section>
+
+  <section id="cup-screen" hidden>
+    <div class="panel">
+      <header class="panel-head">
+        <h2>大会</h2>
+        <p class="progress-line"></p>
+      </header>
+      <div class="panel-body cup-body">
+        <div class="rival-list" id="rival-list"></div>
+        <div class="rival-detail">
+          <p class="rival-round" id="rival-round"></p>
+          <h3 id="rival-name"></h3>
+          <p class="rival-line" id="rival-line"></p>
+          <ul class="chips" id="rival-chips"></ul>
+          <p class="rival-reward" id="rival-reward"></p>
+        </div>
+      </div>
+      <div class="panel-actions">
+        <button type="button" id="cup-back" class="ghost">もどる</button>
+        <button type="button" id="cup-garage" class="ghost">組み立てる</button>
+        <button type="button" id="cup-fight" class="cta">戦う</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="garage-screen" hidden>
+    <div class="panel">
+      <header class="panel-head">
+        <h2>ロボの組み立て</h2>
+        <p class="progress-line"></p>
+      </header>
+      <div class="panel-body">
+        <div class="slot-tabs" id="slot-tabs"></div>
+        <div class="part-list" id="part-list"></div>
+        <div class="part-detail">
+          <h3 id="part-name"></h3>
+          <p id="part-text"></p>
+          <ul class="chips" id="part-chips"></ul>
+        </div>
+        <div class="robot-stats" id="robot-stats"></div>
+      </div>
+      <div class="panel-actions">
+        <button type="button" id="garage-back" class="ghost">もどる</button>
+        <button type="button" id="garage-fight" class="cta">このロボで戦う</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="result-screen" hidden>
+    <p class="eyebrow" id="result-how">K.O.</p>
+    <h2 id="result-title">WIN</h2>
+    <p id="result-detail"></p>
+    <p class="result-line" id="result-line" hidden></p>
+    <p class="champion" id="result-champion" hidden>大会で優勝した！ すべてのライバルに勝った</p>
+    <p class="unlock" id="result-unlock" hidden>新しいパーツ <strong id="unlock-names"></strong> を手に入れた</p>
+    <div class="actions">
+      <button type="button" id="again" class="cta">もう一回</button>
+      <button type="button" id="result-cup" class="ghost">大会へ</button>
+      <button type="button" id="result-garage" class="ghost">組み立てる</button>
+      <button type="button" id="result-title-screen" class="ghost">タイトルへ</button>
+    </div>
+    <p class="progress-line"></p>
+  </section>
+</div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
