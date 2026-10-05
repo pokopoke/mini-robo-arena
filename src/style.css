@@ -39,6 +39,14 @@ html,
 body {
   height: 100%;
   overscroll-behavior: none;
+  /* 二本指で広げたり、すばやく2回押したりしても、画面を拡大しない (スクロールはできる)。iPhone の分は input.js でも止める */
+  touch-action: pan-x pan-y;
+}
+
+/* 戦っている間は、画面のどこを触っても、ブラウザに拡大やスクロールをさせない */
+body.in-battle,
+body.in-battle #app {
+  touch-action: none;
 }
 
 body {

@@ -15,6 +15,7 @@ const STICK_RADIUS = 40; // 仮想スティックがいっぱいに倒れる指�
 const STICK_DEAD = 0.1; // これより小さい傾きは無視する (いっぱいに倒したときに対する割合)
 const STICK_FULL = 0.5; // これだけ倒せば全速で走る (少し動かすだけで走れるように)
 const BUTTON_SLOP = 16; // ボタンの縁からこれだけ外れていても、押したことにする (px)
+const DOUBLE_TAP = 350; // 戦っている間、前のタッチの終わりからこれより早い次のタッチの終わりは、ダブルタップの拡大にさせない (ミリ秒)
 
 // 指の取り込み。本物のタッチでない (試験で作ったイベントなど) と失敗するので、失敗しても続ける
 function capture(el, pointerId) {
@@ -84,6 +85,7 @@ export class Input {
   }
 
   setupTouch() {
+    this.stopZoom();
     const zone = document.getElementById('stick-zone');
     const base = document.getElementById('stick');
     const knob = document.getElementById('stick-knob');
@@ -199,6 +201,25 @@ export class Input {
     };
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
+  }
+
+  // iPhone の Safari (LINE などの中のブラウザも) は、ページの設定 (user-scalable=no) を無視して、二本指で広げたり (ピンチ)、
+  // すばやく2回押したり (ダブルタップ) すると画面を拡大してしまう。拡大の合図 (gesture〜) はいつも止め、戦っている間は、
+  // 二本指以上の動き (左のスティックと右のボタン) と、すばやい2回目のタッチの終わりも止める
+  // (スティックとボタンは pointer〜 で動くので、touch〜 を止めても効く)。止められないタッチ (cancelable が false。Chrome では
+  // touch-action: none のところのタッチがそうなり、もともと拡大しない) は、そのままにする
+  stopZoom() {
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, (e) => e.preventDefault());
+    const inBattle = () => document.body.classList.contains('in-battle');
+    document.addEventListener('touchmove', (e) => {
+      if (e.cancelable && inBattle() && e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    let lastEnd = -Infinity;
+    document.addEventListener('touchend', (e) => {
+      if (e.cancelable && inBattle() && e.timeStamp - lastEnd < DOUBLE_TAP) e.preventDefault();
+      lastEnd = e.timeStamp;
+    }, { passive: false });
+    document.addEventListener('dblclick', (e) => e.preventDefault());
   }
 
   // basisYaw: 「前」とする向き (0 = +z 方向)
